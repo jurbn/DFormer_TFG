@@ -1,10 +1,11 @@
 import os
+os.environ["OPENCV_IO_ENABLE_OPENEXR"]="1"
 import cv2
+import json
 import torch
 import numpy as np
-
+from pycocotools.coco import COCO
 import torch.utils.data as data
-
 
 class RGBXDataset(data.Dataset):
     def __init__(self, setting, split_name, preprocess=None, file_length=None):
@@ -12,108 +13,98 @@ class RGBXDataset(data.Dataset):
         self._split_name = split_name
         self._rgb_path = setting['rgb_root']
         self._rgb_format = setting['rgb_format']
-        self._gt_path = setting['gt_root']
-        self._gt_format = setting['gt_format']
-        self._transform_gt = setting['transform_gt']
         self._x_path = setting['x_root']
         self._x_format = setting['x_format']
         self._x_single_channel = setting['x_single_channel']
-        self._train_source = setting['train_source']
-        self._eval_source = setting['eval_source']
-        self.class_names = setting['class_names']
-        self._file_names = self._get_file_names(split_name)
-        self._file_length = file_length
         self.preprocess = preprocess
+        self._file_length = file_length
+
+        # Initialize COCO API
+        self.coco = COCO(setting[f'{split_name}_json'])
+        # print the amount of images in the dataset
+        print(f"Amount of images in the dataset: {len(self.coco.getImgIds())}")
+        self.imgIds = self.coco.getImgIds()
+        self.catIds = [0] + self.coco.getCatIds()
+        self.class_names = setting['class_names']
 
     def __len__(self):
-        if self._file_length is not None:
-            return self._file_length
-        return len(self._file_names)
+        return self._file_length if self._file_length is not None else len(self.imgIds)
 
     def __getitem__(self, index):
-        if self._file_length is not None:
-            item_name = self._construct_new_file_names(self._file_length)[index]
-        else:
-            item_name = self._file_names[index]
+        try:
+            # Retrieve image metadata from COCO
+            print(f"Retrieving image metadata from COCO: {self.imgIds[index-2]}")
+            img_data = self.coco.loadImgs([self.imgIds[index-2]])[0]
+                
+            img_id = img_data['id']
+            img_name = img_data['file_name']
 
-        temp_index=item_name.find("/")
-
-        item_name=item_name[temp_index+1:].split(self._rgb_format)[0]
-        # item_name = item_name.split(" ")
-        # item_name[-1]=item_name[-1].replace("\n","")
+            # Extract `video_id` and `frame_id` from `img_name`
+            img_name_split = img_name.split('/')
+            if len(img_name_split) == 3:
+                video_id, video_type, frame_id = img_name_split
+            elif len(img_name_split) == 2:
+                video_id, frame_id = img_name_split
             
-        rgb_path = os.path.join(self._rgb_path, item_name.replace('.jpg','').replace('.png','') + self._rgb_format)
-        x_path = os.path.join(self._x_path, item_name.replace('.jpg','').replace('.png','')  + self._x_format)
-        gt_path = os.path.join(self._gt_path, item_name.replace('.jpg','').replace('.png','')  + self._gt_format)
+            # video_id, video_type = os.path.split(video_id)
+            # remove the extension
+            frame_id = frame_id.split('.')[0]
 
-        # rgb_path = os.path.join(self._rgb_path, item_name[0].replace("rgb/",""))
-        # x_path = os.path.join(self._x_path, item_name[1].replace("depth/",""))
-        # gt_path = os.path.join(self._gt_path, item_name[2].replace("label/",""))
+            # Paths for RGB and additional modality X
+            rgb_path = os.path.join(self._rgb_path, video_id, 'color', f"{frame_id}{self._rgb_format}")
+            x_path = os.path.join(self._x_path, video_id, 'depth', f"{frame_id}{self._x_format}")
 
-        rgb = self._open_image(rgb_path, cv2.COLOR_BGR2RGB)
-        # rgb = cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB)
+            # Load images
+            rgb = self._open_image(rgb_path, cv2.COLOR_BGR2RGB)
+            x = self._open_image(x_path, cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH if self._x_single_channel else cv2.COLOR_BGR2RGB)
 
-        gt = self._open_image(gt_path, cv2.IMREAD_GRAYSCALE, dtype=np.uint8)
-        if self._transform_gt:
-            gt = self._gt_transform(gt) 
+            if rgb is None or x is None:
+                raise FileNotFoundError(f"Image not found: {video_id}-{frame_id}")
 
-        if self._x_single_channel:
-            x = self._open_image(x_path, cv2.IMREAD_GRAYSCALE)
-            x = cv2.merge([x, x, x])
-        else:
-            x =  self._open_image(x_path, cv2.COLOR_BGR2RGB)
-        
-        if self.preprocess is not None:
-            rgb, gt, x = self.preprocess(rgb, gt, x)
+            # if the rgb image is one channel, convert it to 3 channels
+            if len(rgb.shape) == 2:
+                rgb = cv2.merge([rgb, rgb, rgb])
+            # if the x image is one channel, convert it to 3 channels
+            if len(x.shape) == 2:
+                x = cv2.merge([x, x, x])
 
-        if self._split_name == 'train':
+            # Generate mask from COCO annotations
+            ann_ids = self.coco.getAnnIds(imgIds=[img_id], catIds=self.catIds)
+            anns = self.coco.loadAnns(ann_ids)
+            gt = self._generate_mask(img_data['height'], img_data['width'], anns)
+
+            # Apply preprocessing if any
+            if self.preprocess is not None:
+                rgb, gt, x = self.preprocess(rgb, gt, x)
+
+            # Convert to tensors
             rgb = torch.from_numpy(np.ascontiguousarray(rgb)).float()
-            gt = torch.from_numpy(np.ascontiguousarray(gt)).long()
-            x = torch.from_numpy(np.ascontiguousarray(x)).float()
-        else:
-            rgb = torch.from_numpy(np.ascontiguousarray(rgb)).float()
-            gt = torch.from_numpy(np.ascontiguousarray(gt)).long()
+            gt = torch.from_numpy(np.ascontiguousarray(gt))
             x = torch.from_numpy(np.ascontiguousarray(x)).float()
 
-        output_dict = dict(data=rgb, label=gt, modal_x=x, fn=str(item_name), n=len(self._file_names))
+            output_dict = dict(data=rgb, label=gt, modal_x=x, fn=img_name, n=len(self.imgIds))
+            return output_dict
 
-        return output_dict
+        except Exception as e:
+            raise Exception(f'Error loading image {index}: {e}')
 
-    def _get_file_names(self, split_name):
-        assert split_name in ['train', 'val']
-        source = self._train_source
-        if split_name == "val":
-            source = self._eval_source
 
-        file_names = []
-        with open(source) as f:
-            files = f.readlines()
-
-        for item in files:
-            file_name = item.strip()
-            file_names.append(file_name)
-
-        return file_names
-
-    def _construct_new_file_names(self, length):
-        assert isinstance(length, int)
-        files_len = len(self._file_names)                          
-        new_file_names = self._file_names * (length // files_len)   
-
-        rand_indices = torch.randperm(files_len).tolist()
-        new_indices = rand_indices[:length % files_len]
-
-        new_file_names += [self._file_names[i] for i in new_indices]
-
-        return new_file_names
+    def _generate_mask(self, height, width, anns):
+        """Generate a segmentation mask from COCO annotations."""
+        # create a blank mask
+        mask = np.zeros((height, width), dtype=np.uint8)
+        # per each annotation, draw that value on the mask
+        for ann in anns:
+            mask = np.maximum(self.coco.annToMask(ann) * ann['category_id'], mask)
+        return mask
 
     def get_length(self):
-        return self.__len__()
+        return len(self.imgIds)
 
     @staticmethod
-    def _open_image(filepath, mode=cv2.IMREAD_COLOR, dtype=None):
-        img = np.array(cv2.imread(filepath, mode), dtype=dtype)
-        return img
+    def _open_image(filepath, mode=cv2.IMREAD_COLOR):
+        # always add cv2.IMREAD_UNCHANGED to read the image as it is
+        return cv2.imread(filepath, mode | cv2.IMREAD_UNCHANGED)
 
     @staticmethod
     def _gt_transform(gt):
@@ -141,3 +132,4 @@ class RGBXDataset(data.Dataset):
             cmap[i, 2] = b
         class_colors = cmap.tolist()
         return class_colors
+

@@ -17,8 +17,8 @@ from utils.lr_policy import WarmUpPolyLR
 from utils.engine.engine import Engine
 from utils.engine.logger import get_logger
 from utils.pyt_utils import all_reduce_tensor
+from utils.val_mm import evaluate, evaluate_msf
 from tensorboardX import SummaryWriter
-from val_mm import evaluate, evaluate_msf
 from importlib import import_module
 import datetime
 
@@ -112,7 +112,7 @@ with Engine(custom_parser=parser) as engine:
     args = parser.parse_args()
 
     config = getattr(import_module(args.config), "C")
-    logger = get_logger(config.log_dir, config.log_file, rank=engine.local_rank)
+    logger = get_logger(config.log_dir, config.log_file)
     if args.use_seed:
         set_seed(config.seed)
         logger.info(f"set seed {config.seed}")
@@ -252,16 +252,12 @@ with Engine(custom_parser=parser) as engine:
     data_setting = {
         "rgb_root": config.rgb_root_folder,
         "rgb_format": config.rgb_format,
-        "gt_root": config.gt_root_folder,
-        "gt_format": config.gt_format,
-        "transform_gt": config.gt_transform,
         "x_root": config.x_root_folder,
         "x_format": config.x_format,
         "x_single_channel": config.x_is_single_channel,
         "class_names": config.class_names,
-        "train_source": config.train_source,
-        "eval_source": config.eval_source,
-        "class_names": config.class_names,
+        "train_source": config.train_json,
+        "eval_source": config.val_json,
     }
     # val_pre = ValPre()
     # val_dataset = RGBXDataset(data_setting, 'val', val_pre)

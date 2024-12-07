@@ -99,22 +99,21 @@ def get_logger_old(log_dir=None, log_file=None, formatter=LogFormatter):
     logger.addHandler(stream_handler)
     return logger
 
-def get_logger(log_dir=None, log_file=None, rank=0):
+def get_logger(log_dir=None, log_file=None, formatter=LogFormatter):
     logger = logging.getLogger()
-    logger.setLevel(level=logging.INFO)
+    logger.setLevel(_default_level)
     del logger.handlers[:]
-    formatter = logging.Formatter('%(asctime)s - %(filename)s[line:%(lineno)d] - %(levelname)s: %(message)s')
 
-    if rank == 0:
-        if log_dir and log_file:
-            file_handler = logging.FileHandler(log_file)
-            file_handler.setLevel(level=logging.INFO)
-            file_handler.setFormatter(formatter)
-            logger.addHandler(file_handler)
+    if log_dir and log_file:
+        pyt_utils.ensure_dir(log_dir)
+        LogFormatter.log_fout = True
+        file_handler = logging.FileHandler(log_file, mode='a')
+        file_handler.setLevel(logging.INFO)
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
 
-        stream_handler = logging.StreamHandler()
-        stream_handler.setLevel(logging.DEBUG)
-        stream_handler.setFormatter(formatter)
-
-        logger.addHandler(stream_handler)
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(formatter(datefmt='%d %H:%M:%S'))
+    stream_handler.setLevel(0)
+    logger.addHandler(stream_handler)
     return logger
