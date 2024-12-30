@@ -172,7 +172,7 @@ class Engine(object):
         else:
             tmp = torch.load(self.continue_state_object)
         t_ioend = time.time()
-        self.state.model = load_model(self.state.model, tmp["model"], is_restore=True)
+        self.state.model = load_model(self.state.model, tmp["model"], is_restore=False)
         self.state.optimizer.load_state_dict(tmp["optimizer"])
         self.state.epoch = tmp["epoch"] + 1
         self.state.iteration = tmp["iteration"]

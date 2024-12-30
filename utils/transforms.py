@@ -181,12 +181,10 @@ def random_crop(img, gt, size):
 
 def normalize(img, mean, std):
     # pytorch pretrained model need the input range: 0-1
-    if img.dtype == np.uint16:
-        normalization_factor = 65535.0
-    else:
-        normalization_factor = 255.0
-    img = img.astype(np.float32) / normalization_factor
-    img = img - mean
-    img = img / std
+    if img.dtype == np.uint8 or img.dtype == np.uint16:
+        max_pixel_val = np.iinfo(img.dtype).max
+        img = img.astype(np.float64) / max_pixel_val
+        img = img - mean
+        img = img / std
     return img
 

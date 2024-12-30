@@ -7,6 +7,8 @@ import numpy as np
 from pycocotools.coco import COCO
 import torch.utils.data as data
 
+from utils.transforms import normalize
+
 class RGBXDataset(data.Dataset):
     def __init__(self, setting, split_name, preprocess=None, file_length=None):
         super(RGBXDataset, self).__init__()
@@ -33,7 +35,6 @@ class RGBXDataset(data.Dataset):
     def __getitem__(self, index):
         try:
             # Retrieve image metadata from COCO
-            print(f"Retrieving image metadata from COCO: {self.imgIds[index-2]}")
             img_data = self.coco.loadImgs([self.imgIds[index-2]])[0]
                 
             img_id = img_data['id']
@@ -76,7 +77,9 @@ class RGBXDataset(data.Dataset):
             # Apply preprocessing if any
             if self.preprocess is not None:
                 rgb, gt, x = self.preprocess(rgb, gt, x)
-
+            else:   # either way, normalize the images
+                rgb = normalize(rgb, self.norm_mean, self.norm_std)
+                x = normalize(x, self.norm_mean, self.norm_std)
             # Convert to tensors
             rgb = torch.from_numpy(np.ascontiguousarray(rgb)).float()
             gt = torch.from_numpy(np.ascontiguousarray(gt))

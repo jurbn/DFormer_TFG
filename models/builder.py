@@ -60,7 +60,7 @@ def build_segmentor(cfg, train_cfg=None, test_cfg=None):
 logger = get_logger()
 
 class EncoderDecoder(nn.Module):
-    def __init__(self, cfg=None, criterion=nn.CrossEntropyLoss(reduction='none', ignore_index=255), norm_layer=nn.BatchNorm2d, syncbn=False):
+    def __init__(self, cfg=None, criterion=nn.CrossEntropyLoss(reduction='mean', ignore_index=255), norm_layer=nn.BatchNorm2d, syncbn=False):
         super(EncoderDecoder, self).__init__()
         self.norm_layer = norm_layer
         self.cfg = cfg
@@ -181,8 +181,8 @@ class EncoderDecoder(nn.Module):
         else:
             out = self.encode_decode(rgb, modal_x)
         if label is not None:
-            loss = self.criterion(out, label.long())[label.long() != self.cfg.background].mean()
+            loss = self.criterion(out, label.long())
             if self.aux_head:
-                loss += self.aux_rate * self.criterion(aux_fm, label.long())[label.long() != self.cfg.background].mean()
+                loss += self.aux_rate * self.criterion(aux_fm, label.long())
             return loss
         return out

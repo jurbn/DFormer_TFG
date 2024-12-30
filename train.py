@@ -14,10 +14,12 @@ from utils.dataloader.RGBXDataset import RGBXDataset
 from utils.init_func import group_weight
 from utils.init_func import configure_optimizers
 from utils.lr_policy import WarmUpPolyLR
+from utils.dropout_policy import PolicyDR
 from utils.engine.engine import Engine
 from utils.engine.logger import get_logger
 from utils.pyt_utils import all_reduce_tensor
 from utils.val_mm import evaluate, evaluate_msf
+from utils.train_utils import modality_dropout_batch
 from tensorboardX import SummaryWriter
 from importlib import import_module
 import datetime
@@ -55,7 +57,7 @@ torch._dynamo.config.suppress_errors = True
 
 
 def is_eval(epoch, config):
-    return epoch > int(config.checkpoint_start_epoch) or epoch == 1 or epoch % 10 == 0
+    return epoch % 10 == 0 or epoch == 1
 
 
 class gpu_timer:
@@ -174,7 +176,7 @@ with Engine(custom_parser=parser) as engine:
     for k in args.__dict__:
         logger.info(k + ": " + str(args.__dict__[k]))
 
-    criterion = nn.CrossEntropyLoss(reduction="none", ignore_index=config.background)
+    criterion = nn.CrossEntropyLoss(reduction="mean", ignore_index=config.background)
 
     if args.syncbn:
         BatchNorm2d = nn.SyncBatchNorm
@@ -228,6 +230,9 @@ with Engine(custom_parser=parser) as engine:
         total_iteration,
         config.niters_per_epoch * config.warm_up_epoch,
     )
+
+    dropout_policy = PolicyDR(config.dropout_rate)
+
     if engine.distributed:
         logger.info(".............distributed training.............")
         if torch.cuda.is_available():
@@ -311,6 +316,9 @@ with Engine(custom_parser=parser) as engine:
             imgs = imgs.cuda(non_blocking=True)
             gts = gts.cuda(non_blocking=True)
             modal_xs = modal_xs.cuda(non_blocking=True)
+
+            dropout = dropout_policy.get_drop_rate(epoch)
+            imgs, modal_xs = modality_dropout_batch(imgs, modal_xs, p=dropout)
 
             if args.amp:
                 with torch.autocast(device_type="cuda", dtype=torch.float16):

@@ -22,6 +22,8 @@ from utils.metrics_new import Metrics
 # from semseg.utils.utils import setup_cudnn
 from math import ceil
 import numpy as np
+from matplotlib import pyplot as plt
+import seaborn as sns
 from torch.utils.data import DistributedSampler, RandomSampler
 from torch import distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -76,6 +78,32 @@ import cv2
 
 #     return total_predictions.unsqueeze(0)
 
+def process_confusion_matrix(conf_matrix):
+        """
+        Takes the already built confusion matrix and processes it to get the IoU in percentage.
+        """
+        conf_matrix = conf_matrix.cpu().numpy()
+        print(conf_matrix)
+        percentage_iou = np.zeros((5,5))
+        # for each row, count the number of actual pixels
+        for row in range(5):
+            row_sum = np.sum(conf_matrix[row])
+            # for each column, divide the number of correctly classified pixels by the total number of actual pixels
+            for col in range(5):
+                percentage_iou[row][col] = conf_matrix[row][col] / row_sum
+        print(percentage_iou)
+        # create an image from the confusion matrix
+        render_confusion_matrix(percentage_iou, ['deer', 'goat', 'donkey', 'goose'])
+
+def render_confusion_matrix(confusion_matrix, class_names):
+    plt.figure(figsize=(10, 8))
+    # numbers have one decimal place and NOT show the legend
+    sns.heatmap(confusion_matrix, annot=True, cmap='Blues', xticklabels=class_names, yticklabels=class_names, fmt='.1%', cbar=False)
+    plt.xlabel('Predicted')
+    plt.ylabel('Actual')
+    plt.title('Confusion Matrix')
+    # plt.savefig('out/results/ir/confusion_matrix_dformer.png')
+    plt.savefig('confusion_matrix_dformer_dropout.png')
 
 @torch.no_grad()
 def evaluate(model, dataloader, config, device, engine, save_dir=None, sliding=False):
@@ -292,7 +320,7 @@ def evaluate_msf(
             )
             scaled_images = [
                 F.interpolate(
-                    img, size=(new_H, new_W), mode="bilinear", align_corners=True
+                    img.permute(0,3,1,2), size=(new_H, new_W), mode="bilinear", align_corners=True
                 )
                 for img in images
             ]
@@ -395,6 +423,8 @@ def evaluate_msf(
         torch.distributed.all_gather_object(all_metrics, metrics)  # list of lists
     else:
         all_metrics = metrics
+    
+    process_confusion_matrix(all_metrics.hist)
     return all_metrics
 
 

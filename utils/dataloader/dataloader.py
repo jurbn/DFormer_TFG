@@ -79,6 +79,8 @@ class ValPre(object):
         self.sign = sign
 
     def __call__(self, rgb, gt, modal_x):
+        rgb = normalize(rgb, self.norm_mean, self.norm_std)
+        modal_x = normalize(modal_x, self.norm_mean, self.norm_std)
         return rgb, gt, modal_x
 
 
