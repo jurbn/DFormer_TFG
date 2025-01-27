@@ -119,10 +119,12 @@ with Engine(custom_parser=parser) as engine:
         syncbn=args.syncbn,
     )
 
-    weight = torch.load(args.continue_fpath)["model"]
-
-    logger.info(f"load model from {args.continue_fpath}")
-    model.load_state_dict(weight,strict=False)
+    if args.continue_fpath:
+        weight = torch.load(args.continue_fpath)["model"]
+        logger.info(f"load model from {args.continue_fpath}")
+        model.load_state_dict(weight,strict=False)
+    else:   # warning!
+        logger.info("WARNING: no model loaded")
 
     if engine.distributed:
         logger.info(".............distributed training.............")
