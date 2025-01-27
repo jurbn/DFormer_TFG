@@ -21,7 +21,7 @@ C.abs_dir = osp.realpath(".")
 # Dataset config
 """Dataset Path"""
 C.dataset_name = 'lindenthal-camera-traps'
-C.dataset_path = osp.join('/media/jorge/HDD/TFG/data', C.dataset_name)
+C.dataset_path = osp.join(C.abs_dir, 'data', C.dataset_name)
 C.random_scramble = True
 
 # COCO JSON files for each split
@@ -32,7 +32,7 @@ C.val_json = osp.join(C.dataset_path, 'lindenthal_coco', 'val.json') # annotatio
 C.rgb_root_folder = osp.join(C.dataset_path, 'lindenthal_coco', 'images')
 C.rgb_format = '.jpg'
 C.x_root_folder = osp.join(C.dataset_path, 'lindenthal_coco', 'images')  # Adjust to the actual modality folder name
-C.x_format = '.png'  # Change format to your additional modality format
+C.x_format = '.exr'  # Change format to your additional modality format
 C.x_is_single_channel = True  # Set True if using a single-channel additional modality
 
 # Dynamically read class names and count from COCO JSON
@@ -57,31 +57,29 @@ C.norm_std = np.array([1., 1., 1.],  dtype=np.float32)
 
 """ Settings for network, this would be different for each kind of model"""
 C.backbone = 'DFormer-Small' # Remember change the path below.
-C.pretrained_model = '/media/jorge/HDD/TFG/pretrained/dformer/DFormer_Small.pth.tar'
+C.pretrained_model = osp.join(C.abs_dir, 'pretrained', 'dformer', 'DFormer_Small.pth.tar')
 C.decoder = 'ham'
 C.decoder_embed_dim = 512
 C.optimizer = 'AdamW'
 
 """Train Config"""
-C.lr = 5e-6
+C.lr = 1e-6
 C.lr_power = 0.9
 C.momentum = 0.9
 C.weight_decay = 0.01
-C.batch_size = 2
+C.batch_size = 16
 C.nepochs = 500
 C.niters_per_epoch = C.num_train_imgs // C.batch_size  + 1
-C.num_workers = 16
-C.train_scale_array = [0.5, 0.75, 1, 1.25, 1.5, 1.75]
+C.num_workers = 8
+C.train_scale_array = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75]
 C.warm_up_epoch = 10
 C.channels=[96,192,288,576]
-
-
 
 C.fix_bias = True
 C.bn_eps = 1e-3
 C.bn_momentum = 0.1
 C.drop_path_rate=0.15
-C.dropout_rate = 0.5
+C.dropout_rate = 0.0
 C.aux_rate =0.0
 
 """Eval Config"""
@@ -101,16 +99,16 @@ def add_path(path):
         sys.path.insert(0, path)
 add_path(osp.join(C.root_dir))
 
-C.log_dir = osp.abspath('/media/jorge/HDD/TFG/out/dformer/' + C.dataset_name + '_' + C.backbone + '_dropout')
+C.log_dir = osp.abspath(osp.join(C.abs_dir, 'out', 'dformer', C.dataset_name + '_' + C.backbone))
 C.tb_dir = osp.abspath(osp.join(C.log_dir, "tb"))
 C.log_dir_link = C.log_dir
 C.checkpoint_dir = osp.abspath(osp.join(C.log_dir, "checkpoint"))#'/mnt/sda/repos/2023_RGBX/pretrained/'#osp.abspath(osp.join(C.log_dir, "checkpoint"))
 
 exp_time = time.strftime('%Y_%m_%d_%H_%M_%S', time.localtime())
-C.log_file = C.log_dir + '/log_' + exp_time + '.log'
-C.link_log_file = C.log_file + '/log_last.log'
-C.val_log_file = C.log_dir + '/val_' + exp_time + '.log'
-C.link_val_log_file = C.log_dir + '/val_last.log'
+C.log_file = osp.join(C.log_dir, 'log_' + exp_time + '.log')
+C.link_log_file = osp.join(C.log_file, 'log_last.log')
+C.val_log_file = osp.join(C.log_dir, 'val_' + exp_time + '.log')
+C.link_val_log_file = osp.join(C.log_dir, 'val_last.log')
 
 
 if __name__ == '__main__':

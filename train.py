@@ -158,7 +158,7 @@ with Engine(custom_parser=parser) as engine:
         engine,
         RGBXDataset,
         config,
-        val_batch_size=int(config.batch_size * val_dl_factor) if config.dataset_name!="SUNRGBD" else int(args.gpus),
+        val_batch_size=config.batch_size #int(config.batch_size * val_dl_factor) if config.dataset_name!="SUNRGBD" else int(args.gpus),
     )
     logger.info(f"val dataset len:{len(val_loader)*int(args.gpus)}")
 
@@ -249,7 +249,7 @@ with Engine(custom_parser=parser) as engine:
 
     engine.register_state(dataloader=train_loader, model=model, optimizer=optimizer)
     if engine.continue_state_object:
-        engine.restore_checkpoint()
+        engine.restore_checkpoint(restore_epoch=True)  # TODO: restore_epoch=True for continue training
 
     optimizer.zero_grad()
 
@@ -533,13 +533,13 @@ with Engine(custom_parser=parser) as engine:
         for i in range(engine.state.epoch + 1, config.nepochs + 1):
             if is_eval(i, config):
                 eval_count += 1
-        left_time = (
-            train_timer.mean_time * (config.nepochs - engine.state.epoch)
-            + eval_timer.mean_time * eval_count
-        )
-        eta = (
-            datetime.datetime.now() + datetime.timedelta(seconds=left_time)
-        ).strftime("%Y-%m-%d %H:%M:%S")
-        logger.info(
-            f"Avg train time: {train_timer.mean_time:.2f}s, avg eval time: {eval_timer.mean_time:.2f}s, left eval count: {eval_count}, ETA: {eta}"
-        )
+        # left_time = (
+        #     train_timer.mean_time * (config.nepochs - engine.state.epoch)
+        #     + eval_timer.mean_time * eval_count
+        # )
+        # eta = (
+        #     datetime.datetime.now() + datetime.timedelta(seconds=left_time)
+        # ).strftime("%Y-%m-%d %H:%M:%S")
+        # logger.info(
+        #     f"Avg train time: {train_timer.mean_time:.2f}s, avg eval time: {eval_timer.mean_time:.2f}s, left eval count: {eval_count}, ETA: {eta}"
+        # )

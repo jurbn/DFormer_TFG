@@ -80,8 +80,9 @@ class RGBXDataset(data.Dataset):
             else:   # either way, normalize the images
                 rgb = normalize(rgb, self.norm_mean, self.norm_std)
                 x = normalize(x, self.norm_mean, self.norm_std)
+            
             # Convert to tensors
-            rgb = torch.from_numpy(np.ascontiguousarray(rgb)).float()
+            rgb = torch.from_numpy(np.ascontiguousarray(rgb)).float()*0.0
             gt = torch.from_numpy(np.ascontiguousarray(gt))
             x = torch.from_numpy(np.ascontiguousarray(x)).float()
 
@@ -107,7 +108,13 @@ class RGBXDataset(data.Dataset):
     @staticmethod
     def _open_image(filepath, mode=cv2.IMREAD_COLOR):
         # always add cv2.IMREAD_UNCHANGED to read the image as it is
-        return cv2.imread(filepath, mode | cv2.IMREAD_UNCHANGED)
+        if filepath.endswith('.exr'):
+            image = cv2.imread(filepath, cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH)
+            # map the image to 65535 by looking at the maximum value
+            image = (image / image.max() * 65535).astype(np.uint16)
+            return image
+        else:
+            return cv2.imread(filepath, mode | cv2.IMREAD_UNCHANGED)
 
     @staticmethod
     def _gt_transform(gt):

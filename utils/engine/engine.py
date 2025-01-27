@@ -158,7 +158,7 @@ class Engine(object):
         checkpoint = osp.join(checkpoint_dir, f"epoch-{self.state.epoch}{infor}.pth")
         self.save_checkpoint(checkpoint)
 
-    def restore_checkpoint(self):
+    def restore_checkpoint(self, restore_epoch=True):
         t_start = time.time()
         if self.distributed:
             # load the model on cpu first to avoid GPU RAM surge
@@ -174,8 +174,12 @@ class Engine(object):
         t_ioend = time.time()
         self.state.model = load_model(self.state.model, tmp["model"], is_restore=False)
         self.state.optimizer.load_state_dict(tmp["optimizer"])
-        self.state.epoch = tmp["epoch"] + 1
-        self.state.iteration = tmp["iteration"]
+        if restore_epoch:
+            self.state.epoch = tmp["epoch"] + 1
+            self.state.iteration = tmp["iteration"]
+        else:
+            self.state.epoch = 1
+            self.state.iteration = 0
         del tmp
         t_end = time.time()
         logger.info(

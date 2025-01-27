@@ -271,6 +271,10 @@ class DFormer(BaseModule):
         
         load_state_dict(self, state_dict, strict=False)
 
+        # print the number of parameters
+        num_parameters = sum([l.nelement() for l in self.parameters()])
+        print(f"Number of parameters: {num_parameters}")
+
     def forward(self, x,x_e):
         if x_e is None:
             x_e=x
